@@ -196,7 +196,7 @@ int main(int argc, char const *argv[])
 
     // setup device memory
     checkCudaErrors(cudaMemcpy(d_in_mat, h_in_mat, mat_size, cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemset(d_out_mat, h_in_mat, mat_size, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_out_mat, h_in_mat, mat_size, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemset(d_error, 0.0f, sizeof(float)));
 
     // call kernel
