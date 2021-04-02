@@ -11,4 +11,4 @@
  * */ 
 
 
-void launch_jacobian(float* in_mat, float* out_mat, const int nrows, const int ncols);
+void launch_jacobian(float* d_in, float* d_temp, const int numRows, const int numCols, float* d_error);
