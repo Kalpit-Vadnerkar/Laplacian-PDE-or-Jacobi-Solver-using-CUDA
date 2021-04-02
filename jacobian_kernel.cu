@@ -20,7 +20,7 @@ void laplacePDE(float *d_in, float *d_temp, int numRows, int numCols, float *d_e
   }
   __syncthreads();
   if (x < numCols && y < numRows){
-    d_error += abs(d_temp[Offset] - d_in[Offset]);
+    d_error[0] += abs(d_temp[Offset] - d_in[Offset]);
     __syncthreads();
     d_in[Offset] = d_temp[Offset];
   }
@@ -36,11 +36,11 @@ void launch_jacobian(float* d_in, float* d_temp, const int numRows, const int nu
     dim3 block(BLOCK, BLOCK, 1);
     dim3 grid((numCols-1)/BLOCK + 1, (numRows-1)/BLOCK + 1, 1);
     for (int i = 0; i < NUM_ITER; ++i){
-        d_error = 0;
+        d_error[0] = 0;
         laplacePDE<<<grid,block>>>(d_in, d_temp, numRows, numCols, d_error);
         cudaDeviceSynchronize();
         checkCudaErrors(cudaGetLastError());
-        if (d_error < EPSILON){
+        if (d_error[0] < EPSILON){
             break;        
         }
     }
