@@ -144,7 +144,7 @@ int main(int argc, char const *argv[])
     int h_nrows, h_ncols;
     int d_nrows, d_ncols;
     float** h_in_mat, **h_out_mat;
-    float* d_in_mat, *d_out_mat, *d_result_mat;
+    float* d_in_mat, *d_out_mat, *d_result_mat, *d_error;
 
     if (argc != 3)
     {
@@ -192,13 +192,15 @@ int main(int argc, char const *argv[])
     // allocate device memory
     checkCudaErrors(cudaMalloc((void**)&d_in_mat, mat_size));
     checkCudaErrors(cudaMalloc((void**)&d_out_mat, mat_size));
+    checkCudaErrors(cudaMalloc((void**)&d_error, sizeof(float)));
 
     // setup device memory
     checkCudaErrors(cudaMemcpy(d_in_mat, h_in_mat, mat_size, cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemset(d_out_mat, 0.0f, mat_size));
+    checkCudaErrors(cudaMemset(d_out_mat, h_in_mat, mat_size, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemset(d_error, 0.0f, sizeof(float)));
 
     // call kernel
-    launch_jacobian(d_in_mat, d_out_mat, d_nrows, d_ncols);
+    launch_jacobian(d_in_mat, d_out_mat, d_nrows, d_ncols, d_error);
 
     // get results from device
     d_result_mat = new float[mat_size];

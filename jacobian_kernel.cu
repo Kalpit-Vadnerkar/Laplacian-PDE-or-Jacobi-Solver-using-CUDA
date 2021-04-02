@@ -1,9 +1,10 @@
 #include "jacobian_kernel.h"
+#include "constants.h"
 
 #define BLOCK 32
 
 __global__ 
-void im2Gray(uchar4 *d_in, unsigned char *d_grey, int numRows, int numCols){
+void laplacePDE(float *d_in, float *d_temp, int numRows, int numCols, float *d_error){
 
  /*
    Your kernel here: Make sure to check for boundary conditions
@@ -11,30 +12,38 @@ void im2Gray(uchar4 *d_in, unsigned char *d_grey, int numRows, int numCols){
 
   int x = threadIdx.x + blockIdx.x * blockDim.x;
   int y = threadIdx.y + blockIdx.y * blockDim.y;
-  
 
+  int Offset = y * numCols + x;
+
+  if (x < numCols - 1 && x > 0 && y < numRows - 1 && y > 0){
+    d_temp[Offset] = (d_in[(y - 1) * numCols + x] + d_in[y * numCols + x - 1] + d_in[y * numCols + x + 1] + d_in[(y + 1) * numCols + x]) / 4;
+  }
+  __syncthreads();
   if (x < numCols && y < numRows){
-    int grayOffset = y * numCols + x;
-    unsigned char r = d_in[grayOffset].x; 
-    unsigned char g = d_in[grayOffset].y;
-    unsigned char b = d_in[grayOffset].z;
-    d_grey[grayOffset] = (unsigned char)(0.299f * r + 0.587f * g + 0.114f * b);
-  } 
+    d_error += abs(d_temp[Offset] - d_in[Offset]);
+    __syncthreads();
+    d_in[Offset] = d_temp[Offset];
+  }
+
 }
 
 
 
 
-void launch_jacobian(float* in_mat, float* out_mat, const int numRows, const int numCols){
+void launch_jacobian(float* d_in, float* d_temp, const int numRows, const int numCols, float* d_error){
     // configure launch params here 
     
     dim3 block(BLOCK, BLOCK, 1);
     dim3 grid((numCols-1)/BLOCK + 1, (numRows-1)/BLOCK + 1, 1);
-    
-    im2Gray<<<grid,block>>>(d_in, d_grey, numRows, numCols);
-    cudaDeviceSynchronize();
-    checkCudaErrors(cudaGetLastError());
-    
+    for (int i = 0; i < NUM_ITER; ++i){
+        d_error = 0;
+        laplacePDE<<<grid,block>>>(d_in, d_temp, numRows, numCols, d_error);
+        cudaDeviceSynchronize();
+        checkCudaErrors(cudaGetLastError());
+        if (d_error < EPSILON){
+            break;        
+        }
+    }
 }
 
 
