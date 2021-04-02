@@ -198,7 +198,7 @@ int main(int argc, char const *argv[])
     checkCudaErrors(cudaMemset(d_out_mat, 0.0f, mat_size));
 
     // call kernel
-    launch_solver(d_in_mat, d_out_mat, d_nrows, d_ncols);
+    launch_jacobian(d_in_mat, d_out_mat, d_nrows, d_ncols);
 
     // get results from device
     d_result_mat = new float[mat_size];
