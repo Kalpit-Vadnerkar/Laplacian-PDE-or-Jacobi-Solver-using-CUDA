@@ -24,43 +24,21 @@ void fill_mat(float** mat, const int nrows, const int ncols)
    }
 }
 
-bool is_edge(const int row, const int col, const int nrow, const int ncol)
-{
-    if (row == 1 || row == nrow-2 || col == 1 || col == ncol-2)
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
-bool is_corner(const int row, const int col, const int nrow, const int ncol)
-{
-    if ((row == 1 && col == 1) || (row == 1 && col == ncol-2) ||
-            (row == nrow-2 && col == 1) || (row == nrow-2 && col == ncol-2))
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
 
 bool compare_mats(float** const mat1, float** const mat2,
         const int nrow, const int ncol)
 {
+    float error = 0;
     for (int r = 0; r < nrow; ++r)
     {
         for (int c = 0; c < ncol; ++c)
         {
-            if ((float)fabs(mat1[r][c] - mat2[r][c]) > EPSILON)
-            {
-                return false;
-            }
+            error += (float)fabs(mat1[r][c] - mat2[r][c]);
         }
+    }
+    if (error > EPSILON)
+    {
+      return false;
     }
 
     return true;
@@ -87,12 +65,8 @@ void serial_solver(float** mat, const int nrow, const int ncol)
             {
                 sum = mat[r-1][c] + mat[r][c-1] + mat[r][c+1] + mat[r+1][c];
                 avg = (float)sum / (float)nsummed;
-
-                //std::cout << "r:" << r << " c:" << c << " sum=" << sum << " avg=" << avg << "\n";
-
                 temp_mat[r][c] = avg;
             }
-            //std::cout << std::endl;
         }
         
         // check if the calculation has converged enough
@@ -117,18 +91,19 @@ void serial_solver(float** mat, const int nrow, const int ncol)
 
 void check_results(float** correct_mat, float* test_mat, const int rows, const int cols)
 {
+    float e = 0;
     for (int r = 0; r < rows; ++r)
     {
         for (int c = 0; c < cols; ++c)
         {
             int index = r*cols + c;
-
-            if ((double)fabs(correct_mat[r][c] - test_mat[index]) > COMP_ERR)
-            {
-                printf("FAILED: matrices are different at index %d,%d\n", r,c);
-                exit(0);
-            }
+            e = fabs(correct_mat[r][c] - test_mat[index]);        
         }
+    }
+    if (e < 0.001)
+    {
+      printf("FAILED: matrices are different \n");
+      exit(0);
     }
 }
 
@@ -185,9 +160,9 @@ int main(int argc, char const *argv[])
     serial_solver(h_out_mat, h_nrows, h_ncols);
     auto end2 = high_resolution_clock::now();
 
-    auto serial_dur = duration_cast<microseconds>(end1-start1 + end2-start2);
+    auto serial_dur = duration_cast<microseconds>(end2-start2);
 
-    std::cout << "serial time: " << serial_dur.count() << "us" << std::endl;
+    std::cout << "serial time: " << serial_dur.count() << "microseconds" << std::endl;
 
     // allocate device memory
     checkCudaErrors(cudaMalloc((void**)&d_in_mat, mat_size));
@@ -207,51 +182,7 @@ int main(int argc, char const *argv[])
 
     checkCudaErrors(cudaMemcpy(d_result_mat, d_out_mat, mat_size, cudaMemcpyDeviceToHost));
 
-    // print out serial matrix
-    std::cout << "serial results" << "\n";
-    for (int i = 0; i < h_nrows; ++i)
-    {
-        for (int j = 0; j < h_ncols; ++j)
-        {
-            std::cout << h_in_mat[i][j] << " ";
-        }
-        std::cout << "\n";
-    }
-   
-    std::cout << "\n";
-
-    for (int i = 0; i < h_nrows; ++i)
-    {
-        for (int j = 0; j < h_ncols; ++j)
-        {
-            std::cout << h_out_mat[i][j] << " ";
-        }
-        std::cout << "\n";
-    }
-
     std::cout << std::endl;
-
-    // print out cuda matrix
-    std::cout << "cuda results" << "\n";
-    for (int i = 0; i < h_nrows; ++i)
-    {
-        for (int j = 0; j < h_ncols; ++j)
-        {
-            std::cout << h_in_mat[i][j] << " ";
-        }
-        std::cout << "\n";
-    }
-   
-    std::cout << "\n";
-
-    for (int i = 0; i < h_nrows; ++i)
-    {
-        for (int j = 0; j < h_ncols; ++j)
-        {
-            std::cout << d_result_mat[i*d_ncols + j] << " ";
-        }
-        std::cout << "\n";
-    }
 
     std::cout << std::endl;
     
