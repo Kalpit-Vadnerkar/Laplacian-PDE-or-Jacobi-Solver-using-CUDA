@@ -108,9 +108,9 @@ int main(int argc, char const *argv[])
         h_in[i] = new float[h_ncols]();
     }
     
-    for (int r = 1; r < nrows - 1; ++r)
+    for (int r = 1; r < h_nrows - 1; ++r)
     {
-        for (int c = 1; c < ncols - 1; ++c)
+        for (int c = 1; c < h_ncols - 1; ++c)
         {
             h_in[r][c] = (float)(rand() % 255 - 100);
         }
@@ -139,12 +139,12 @@ int main(int argc, char const *argv[])
     launch_jacobian(d_in, d_out, h_nrows, h_ncols, d_error);
 
     // get results from device
-    d_result = new float[size];
+    h_result = new float[size];
 
     checkCudaErrors(cudaMemcpy(h_result, d_out, size, cudaMemcpyDeviceToHost));
 
    
-    check_results(h_out, d_result, h_nrows, h_ncols);
+    check_results(h_in, h_result, h_nrows, h_ncols);
     printf("PASSED!!!!!!\n");
 
     // cleanup
