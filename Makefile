@@ -13,10 +13,10 @@ CUDA_LD_FLAGS=-L -lcuda -lcudart
 final: main.o jacob.o
 	g++ -o gjacob main.o jacobian_kernel.o $(CUDA_LD_FLAGS)
 
-main.o:main.cpp jacobian_kernel.h utils.h constants.h 
+main.o:main.cpp jacobian_kernel.h utils.h
 	g++ -c $(GCC_OPTS) -I $(CUDA_INCLUDEPATH) main.cpp 
 
-jacob.o: jacobian_kernel.cu jacobian_kernel.h  utils.h constants.h
+jacob.o: jacobian_kernel.cu jacobian_kernel.h  utils.h
 	$(NVCC) -c jacobian_kernel.cu $(NVCC_OPTS)
 
 clean:
