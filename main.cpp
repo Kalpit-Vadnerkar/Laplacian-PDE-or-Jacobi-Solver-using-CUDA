@@ -10,22 +10,9 @@
 
 #include "utils.h"
 #include "jacobian_kernel.h"
-#include "constants.h"
-
-void fill_mat(float** mat, const int nrows, const int ncols)
-{
-   for (int r = 1; r < nrows-1; ++r)
-   {
-       for (int c = 1; c < ncols-1; ++c)
-       {
-           // fill in matrix with values between -100 and 100
-           mat[r][c] = (float)(rand() % 201 - 100);
-       }
-   }
-}
 
 
-bool compare_mats(float** const mat1, float** const mat2,
+bool are_similar(float** a, float** b,
         const int nrow, const int ncol)
 {
     float error = 0;
@@ -33,10 +20,10 @@ bool compare_mats(float** const mat1, float** const mat2,
     {
         for (int c = 0; c < ncol; ++c)
         {
-            error += (float)fabs(mat1[r][c] - mat2[r][c]);
+            error += (float)fabs(a[r][c] - b[r][c]);
         }
     }
-    if (error > EPSILON)
+    if (error > 0.000001f)
     {
       return false;
     }
@@ -44,52 +31,39 @@ bool compare_mats(float** const mat1, float** const mat2,
     return true;
 }
 
-void serial_solver(float** mat, const int nrow, const int ncol)
+void serial(float** h_in, const int numRow, const int numCol)
 {
-    float** temp_mat = new float*[nrow]();
-    for (int i = 0; i < nrow; ++i)
+    float** temp = new float*[numRow]();
+    for (int i = 0; i < numRow; ++i)
     {
-        temp_mat[i] = new float[ncol]();
+        temp[i] = new float[numCol]();
     }
 
-    for (int i = 0; i < NUM_ITER; ++i)
+    for (int i = 0; i < 100; ++i)
     {
-        // calculate the next iteration of the matrix
-        for (int r = 1; r < nrow-1; ++r)
+        for (int r = 1; r < numRow -1; ++r)
         {   
-            float sum;
-            float avg;
-            int nsummed = 4;
-
-            for (int c = 1; c < ncol-1; ++c)
+            for (int c = 1; c < numCol -1; ++c)
             {
-                sum = mat[r-1][c] + mat[r][c-1] + mat[r][c+1] + mat[r+1][c];
-                avg = (float)sum / (float)nsummed;
-                temp_mat[r][c] = avg;
+                temp[r][c] = (h_in[r - 1][c] + h_in[r][c - 1] + h_in[r][c + 1] + h_in[r + 1][c]) / 4;
             }
         }
         
-        // check if the calculation has converged enough
-        if (compare_mats(mat, temp_mat, nrow, ncol))
+        
+        if (are_similar(h_in, temp, numRow, numCol))
         {
             break;
         }
 
-        // copy matrix for next iteration
-        for (int r = 1; r < nrow-1; ++r)
+        
+        for (int r = 1; r < numRow -1; ++r)
         {
-            memcpy(mat[r], temp_mat[r], ncol*sizeof(float));
+            memcpy(h_in[r], temp[r], numCol *sizeof(float));
         }
     }
-
-    for (int i = 0; i < nrow; ++i)
-    {
-        delete[] temp_mat[i];
-    }
-    delete[] temp_mat;
 }
 
-void check_results(float** correct_mat, float* test_mat, const int rows, const int cols)
+void check_results(float** serial_mat, float* gpu_mat, const int rows, const int cols)
 {
     float e = 0;
     for (int r = 0; r < rows; ++r)
@@ -97,7 +71,7 @@ void check_results(float** correct_mat, float* test_mat, const int rows, const i
         for (int c = 0; c < cols; ++c)
         {
             int index = r*cols + c;
-            e = fabs(correct_mat[r][c] - test_mat[index]);        
+            e = fabs(serial_mat[r][c] - gpu_mat[index]);
         }
     }
     if (e < 0.001)
@@ -109,7 +83,7 @@ void check_results(float** correct_mat, float* test_mat, const int rows, const i
 
 int main(int argc, char const *argv[]) 
 {
-    srand(40698);
+    srand(76465);
 
     using std::chrono::high_resolution_clock;
     using std::chrono::duration_cast;
@@ -117,92 +91,65 @@ int main(int argc, char const *argv[])
     using std::chrono::microseconds;
 
     int h_nrows, h_ncols;
-    int d_nrows, d_ncols;
-    float** h_in_mat, **h_out_mat;
-    float* d_in_mat, *d_out_mat, *d_result_mat, *d_error;
+    float** h_in, *h_result;
+    float* d_in, *d_out, *d_error;
 
-    if (argc != 3)
-    {
-        fprintf(stderr, "ERROR: run as ./{program_name} {num_rows} {num_cols}\n");
-        exit(0);
-    }
 
     // add 2 for padding of zeros
-    h_nrows = std::stoi(argv[1], nullptr) + 2;
-    h_ncols = std::stoi(argv[2], nullptr) + 2;
-    d_nrows = h_nrows;
-    d_ncols = h_ncols;
+    h_nrows = std::stoi(argv[1], nullptr);
+    h_ncols = std::stoi(argv[2], nullptr);
     
-    size_t mat_size = h_nrows*h_ncols*sizeof(float);
+    
+    size_t size = h_nrows*h_ncols*sizeof(float);
 
-    auto start1 = high_resolution_clock::now();
-
-    // allocate the host matrices
-    h_in_mat = new float*[h_nrows]();
-    h_out_mat = new float*[h_nrows]();
+    h_in = new float*[h_nrows]();
     for (int i = 0; i < h_nrows; ++i)
     {
-        h_in_mat[i] = new float[h_ncols]();
-        h_out_mat[i] = new float[h_ncols]();
+        h_in[i] = new float[h_ncols]();
     }
-    auto end1 = high_resolution_clock::now();
-
-    // populate the matrix with random values
-    fill_mat(h_in_mat, h_nrows, h_ncols);
-
-    // copy memory for the serial solver
-    for (int i = 0; i < h_nrows; ++i)
+    
+    for (int r = 1; r < nrows - 1; ++r)
     {
-        memcpy(h_out_mat[i], h_in_mat[i], h_ncols*sizeof(float));
+        for (int c = 1; c < ncols - 1; ++c)
+        {
+            h_in[r][c] = (float)(rand() % 255 - 100);
+        }
     }
-
-    auto start2 = high_resolution_clock::now();
-    serial_solver(h_out_mat, h_nrows, h_ncols);
-    auto end2 = high_resolution_clock::now();
-
-    auto serial_dur = duration_cast<microseconds>(end2-start2);
-
-    std::cout << "serial time: " << serial_dur.count() << "microseconds" << std::endl;
 
     // allocate device memory
-    checkCudaErrors(cudaMalloc((void**)&d_in_mat, mat_size));
-    checkCudaErrors(cudaMalloc((void**)&d_out_mat, mat_size));
+    checkCudaErrors(cudaMalloc((void**)&d_in, size));
+    checkCudaErrors(cudaMalloc((void**)&d_out, size));
     checkCudaErrors(cudaMalloc((void**)&d_error, sizeof(float)));
 
     // setup device memory
-    checkCudaErrors(cudaMemcpy(d_in_mat, h_in_mat, mat_size, cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(d_out_mat, h_in_mat, mat_size, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_in, h_in, size, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_out, h_in, size, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemset(d_error, 0.0f, sizeof(float)));
 
+
+    auto start = high_resolution_clock::now();
+    serial(h_in, h_nrows, h_ncols);
+    auto end = high_resolution_clock::now();
+    auto serial_dur = duration_cast<microseconds>(end - start);
+
+    std::cout << "serial time: " << serial_dur.count() << "microseconds" << std::endl;
+
+    
     // call kernel
-    launch_jacobian(d_in_mat, d_out_mat, d_nrows, d_ncols, d_error);
+    launch_jacobian(d_in, d_out, h_nrows, h_ncols, d_error);
 
     // get results from device
-    d_result_mat = new float[mat_size];
+    d_result = new float[size];
 
-    checkCudaErrors(cudaMemcpy(d_result_mat, d_out_mat, mat_size, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy(h_result, d_out, size, cudaMemcpyDeviceToHost));
 
-    std::cout << std::endl;
-
-    std::cout << std::endl;
-    
-
-    check_results(h_out_mat, d_result_mat, h_nrows, h_ncols);
-    printf("TEST PASSED!!!!!!\n");
+   
+    check_results(h_out, d_result, h_nrows, h_ncols);
+    printf("PASSED!!!!!!\n");
 
     // cleanup
-    cudaFree(d_in_mat);
-    cudaFree(d_out_mat);
-
-    for (int i = 0; i < h_nrows; ++i)
-    {
-        delete[] h_in_mat[i];
-        delete[] h_out_mat[i];
-    }
-    delete[] h_in_mat;
-    delete[] h_out_mat;
-
-    delete[] d_result_mat;
+    cudaFree(d_in);
+    cudaFree(d_out);
 
     return 0;
 }

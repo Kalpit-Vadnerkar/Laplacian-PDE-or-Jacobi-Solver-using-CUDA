@@ -1,5 +1,4 @@
 #include "jacobian_kernel.h"
-#include "constants.h"
 
 #define BLOCK 32
 
@@ -15,7 +14,7 @@ void laplacePDE(float *d_in, float *d_temp, int numRows, int numCols, float *d_e
 
   int Offset = y * numCols + x;
 
-  for (int i = 0; i < NUM_ITER; ++i){
+  for (int i = 0; i < 100; ++i){
     if (x < numCols - 1 && x > 0 && y < numRows - 1 && y > 0){
         d_temp[Offset] = (d_in[(y - 1) * numCols + x] + d_in[y * numCols + x - 1] + d_in[y * numCols + x + 1] + d_in[(y + 1) * numCols + x]) / 4;
     }
@@ -25,7 +24,7 @@ void laplacePDE(float *d_in, float *d_temp, int numRows, int numCols, float *d_e
         __syncthreads();
         d_in[Offset] = d_temp[Offset];
     }
-    if (d_error[0] < EPSILON)
+    if (d_error[0] < 0.000001f)
         break;
   }
 }
@@ -43,8 +42,3 @@ void launch_jacobian(float* d_in, float* d_temp, const int numRows, const int nu
     cudaDeviceSynchronize();
     checkCudaErrors(cudaGetLastError());
 }
-
-
-
-
-
